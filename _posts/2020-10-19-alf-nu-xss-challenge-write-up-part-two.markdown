@@ -1,7 +1,7 @@
 ---
 layout: post
 title:  "alf.nu XSS challenges Write-ups level18 to level29 (part two)"
-date:   2018-10-19 21:46:23 +0800
+date:   2020-10-19 21:46:23 +0800
 categories: jekyll update
 ---
 # alf.nu XSS challenges Write-ups level18 to level29 (part two)
