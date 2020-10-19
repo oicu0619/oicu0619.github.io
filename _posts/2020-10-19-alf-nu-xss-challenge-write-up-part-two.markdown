@@ -28,6 +28,8 @@ function escape(s) {
 <style>@keyframes x{}</style><form style="animation-name:x" onanimationend="alert(1)"><input id=attributes></form>
 ```
 ### background info
-这个XSS主要的技术是dom clobbering. (https://portswigger.net/web-security/dom-based/dom-clobbering)。DOM clobbering不仅可以利用dom element来控制window scope的变量, 还可以用form元素的子元素input来污染form scope的变量. 
-题中遍历了n.attributes, 其属性"attributes"就被子元素的的input污染了.
-在理解这个原理后, 找一个合适的POC就可以了. https://portswigger.net/web-security/cross-site-scripting/cheat-sheet . 注意iframe中autofocus是不能执行的.
+这个XSS主要的技术是dom clobbering. 参考https://portswigger.net/web-security/dom-based/dom-clobbering.DOM clobbering不仅可以利用dom element来控制window scope的变量, 还可以用form元素的子元素input来污染form scope的变量. 
+
+题中的escape函数遍历了n.attributes. 答案POC中的form元素的属性"attributes"就被子元素的的input污染了.
+
+在理解这个原理后, 找一个合适的POC就可以了. 参考https://portswigger.net/web-security/cross-site-scripting/cheat-sheet . 注意本题iframe中autofocus是不能执行的.
