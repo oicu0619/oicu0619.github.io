@@ -1,7 +1,7 @@
 ---
 layout: post
 title:  "MSSQL SQL注入 xp_cmdshell的一个技巧"
-date:   2025-09-03 17:46:23 +0800
+date:   2025-09-03 17:10:23 +0800
 categories: jekyll update
 ---
 # MSSQL SQL注入 xp_cmdshell的一个技巧
