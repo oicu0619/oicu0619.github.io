@@ -35,6 +35,7 @@ SESSION_COOKIES = {
     'access_token': "REPLACE_ME",
     'gateway-chatbot-app': "REPLACE_ME",
     'JSESSIONID': "REPLACE_ME",
+    'acw_tc': "REPLACE_ME",
 }
 
 CONVERT_UPLOAD = "/base-admin/public/file/v1/kb-material-upload"
